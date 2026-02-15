@@ -22,3 +22,22 @@
 - Fix:
 - Prevent Recurrence (テスト/チェック追加内容):
 - Files Changed:
+- Date: 2026-02-16
+- Symptom:
+  - `run:daily` が `missing revert data (action=\"estimateGas\")` で停止し、トランザクション原因（宛先/データ/残高）を確定できなかった
+- Evidence (ログ/tx/stacktrace/URL):
+  - 実ログ: `FATAL: ... missing revert data`
+  - 事前検証で `transfer` 実行前の残高不一致を確認できる設計が未実装だった
+- Root Cause:
+  - 送信前ガードが不足し、`estimateGas` が内部で revert しても tx コンテキストが欠落していた
+- Fix:
+  - `src/lib/env.ts` で `SINK_ADDRESS` のゼロアドレス禁止を追加
+  - `src/lib/env.test.ts` にゼロアドレス拒否テストを追加
+  - `src/daily.ts` で transfer/approve 前に `balanceOf` と `sink`/`amount` をログ出力
+  - `src/daily.ts` で `estimateGas/send/waitAndVerify` 失敗時に `to/from/data/nonce/feeFields` を含む再送信可能なエラーログで rethrow
+- Prevent Recurrence (テスト/チェック追加内容):
+  - `src/lib/env.test.ts` のゼロアドレス拒否テスト
+- Files Changed:
+  - `src/lib/env.ts`
+  - `src/lib/env.test.ts`
+  - `src/daily.ts`
