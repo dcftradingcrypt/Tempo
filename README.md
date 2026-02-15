@@ -88,3 +88,4 @@ npm run run:daily
 
 - faucet 呼び出しコードは実装していません。
 - `secrets/wallet.enc` は暗号化 JSON を commit 可能ですが、パスワードは必ず GitHub Secrets で管理してください。
+- 同梱の `secrets/wallet.enc` はランダム生成した未資金サンプルです。運用前に funded ウォレットの暗号化 keystore に差し替えてください。
