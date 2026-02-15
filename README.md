@@ -47,3 +47,5 @@ Optional Repository Variable:
 ## Notes
 - faucet（`tempo_fundAddress` 等）は実装に含みません。
 - 失敗時は `exit code != 0` で落ち、握りつぶしません。
+- `SINK_ADDRESS` は `TEMPO` の Tip-20 namespace (`0x20c000000000000000000000...`) とゼロアドレスを受け付けません。
+- 実行前に各 TIP-20 transfer の `balanceOf(wallet)`、`transferAmount`、`SINK` をログ出力し、`estimateGas` 失敗時は `to/from/data/nonce/feeFields` を含む再スロー情報を出力します。

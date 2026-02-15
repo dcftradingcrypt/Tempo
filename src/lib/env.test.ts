@@ -15,6 +15,15 @@ describe("loadEnv", () => {
     ).toThrow("SINK_ADDRESS must not be zero address");
   });
 
+  it("rejects tip20 prefix sink", () => {
+    expect(() =>
+      loadEnv({
+        WALLET_PASSWORD: "x",
+        SINK_ADDRESS: "0x20c0000000000000000000000000000000000123"
+      })
+    ).toThrow("SINK_ADDRESS must not be TIP-20 namespace target");
+  });
+
   it("checksums sink address", () => {
     const e = loadEnv({
       WALLET_PASSWORD: "x",

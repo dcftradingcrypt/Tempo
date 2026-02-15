@@ -57,11 +57,12 @@ async function ensureBalance(
   sink: string,
   token: Contract,
   tokenName: string,
+  tokenAddress: string,
   amount: bigint
 ): Promise<void> {
   const balance = await token.balanceOf(sender);
   console.log(
-    `[balance] ${tokenName} sender=${sender} sink=${sink} balance=${balance.toString()} transferAmount=${amount.toString()}`
+    `[balance] token=${tokenName} address=${tokenAddress} sender=${sender} sink=${sink} balance=${balance.toString()} transferAmount=${amount.toString()}`
   );
 
   if (balance < amount) {
@@ -103,7 +104,7 @@ async function main(): Promise<void> {
   for (const t of TOKEN_LIST) {
     const token = new Contract(t.address, ERC20_ABI, signer);
     await assertTokenDecimals(token, TOKEN_DECIMALS, t.name);
-    await ensureBalance(sender, sink, token, t.name, amount);
+    await ensureBalance(sender, sink, token, t.name, t.address, amount);
 
     const overrides = await feeOverrides(provider, nonce);
     const data = token.interface.encodeFunctionData("transfer", [sink, amount]);
@@ -171,7 +172,7 @@ async function main(): Promise<void> {
   {
     const alpha = new Contract(TOKENS.alphaUSD, ERC20_ABI, signer);
     await assertTokenDecimals(alpha, TOKEN_DECIMALS, "AlphaUSD");
-    await ensureBalance(sender, sink, alpha, "AlphaUSD", amount);
+    await ensureBalance(sender, sink, alpha, "AlphaUSD", TOKENS.alphaUSD, amount);
 
     const overrides = await feeOverrides(provider, nonce);
     const data = alpha.interface.encodeFunctionData("approve", [PREDEPLOYED.permit2, MaxUint256]);
