@@ -1,34 +1,19 @@
-const DATE_FORMATTER = new Intl.DateTimeFormat("en-CA", {
-  timeZone: "Asia/Tokyo",
-  year: "numeric",
-  month: "2-digit",
-  day: "2-digit"
-});
-
-const TIME_FORMATTER = new Intl.DateTimeFormat("en-GB", {
-  timeZone: "Asia/Tokyo",
-  hour12: false,
-  hour: "2-digit",
-  minute: "2-digit",
-  second: "2-digit"
-});
-
-export interface JstParts {
-  readonly date: string;
-  readonly time: string;
-  readonly runId: string;
-  readonly timestamp: string;
+export function nowJstDateString(): string {
+  return new Date().toLocaleDateString("sv-SE", { timeZone: "Asia/Tokyo" });
 }
 
-export function getJstParts(now: Date = new Date()): JstParts {
-  const date = DATE_FORMATTER.format(now);
-  const time = TIME_FORMATTER.format(now);
-  const runId = time.replaceAll(":", "");
+export function nowJstTimeString(): string {
+  const parts = new Intl.DateTimeFormat("sv-SE", {
+    timeZone: "Asia/Tokyo",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23"
+  }).formatToParts(new Date());
 
-  return {
-    date,
-    time,
-    runId,
-    timestamp: `${date}T${time}+09:00`
-  };
+  const h = parts.find((p) => p.type === "hour")?.value;
+  const m = parts.find((p) => p.type === "minute")?.value;
+  const s = parts.find((p) => p.type === "second")?.value;
+  if (!h || !m || !s) throw new Error("Failed to format JST time parts");
+  return `${h}${m}${s}`;
 }

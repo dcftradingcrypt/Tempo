@@ -1,21 +1,18 @@
-import { loadRuntimeEnv } from "../src/lib/env.js";
-import { createTempoProvider } from "../src/lib/provider.js";
-import { loadWalletFromKeystore } from "../src/lib/keystore.js";
+import "dotenv/config";
+import { Wallet } from "ethers";
+import { readFile } from "node:fs/promises";
 
 async function main(): Promise<void> {
-  const env = loadRuntimeEnv();
-  const provider = await createTempoProvider();
-  const wallet = await loadWalletFromKeystore(env.walletEncPath, env.walletPassword, provider);
+  const encPath = process.env.WALLET_ENC_PATH || "secrets/wallet.enc";
+  const password = process.env.WALLET_PASSWORD;
+  if (!password) throw new Error("WALLET_PASSWORD is required");
 
-  console.log(wallet.address);
+  const json = await readFile(encPath, "utf8");
+  const w = await Wallet.fromEncryptedJson(json, password);
+  console.log(`address=${w.address}`);
 }
 
-main().catch((error: unknown) => {
-  if (error instanceof Error) {
-    console.error(error.message);
-  } else {
-    console.error(error);
-  }
-
+main().catch((e) => {
+  console.error("FATAL:", e instanceof Error ? e.message : String(e));
   process.exit(1);
 });

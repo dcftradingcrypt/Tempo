@@ -1,108 +1,143 @@
-import { Contract, MaxUint256, type TransactionResponse } from "ethers";
+import "dotenv/config";
+import { Contract, MaxUint256, getAddress, parseUnits } from "ethers";
 import { ERC20_ABI } from "./abi/erc20.js";
 import { PERMIT2_ABI } from "./abi/permit2.js";
-import { loadRuntimeEnv } from "./lib/env.js";
-import { loadWalletFromKeystore } from "./lib/keystore.js";
-import { createTempoProvider } from "./lib/provider.js";
-import { writeDailyReport, type DailyReport, type TxReport } from "./lib/report.js";
-import { SequentialTxRunner } from "./lib/tx.js";
-import { getJstParts } from "./lib/dateJst.js";
-import { PERMIT2_ADDRESS, TEMPO_CHAIN_ID, TEMPO_RPC_URL, TOKENS } from "./tempo.js";
+import { PREDEPLOYED, TEMPO, TOKEN_DECIMALS, TOKENS } from "./tempo.js";
+import { nowJstDateString, nowJstTimeString } from "./lib/dateJst.js";
+import { loadEnv } from "./lib/env.js";
+import { loadWalletFromEnc } from "./lib/keystore.js";
+import { assertChainId, makeProvider } from "./lib/provider.js";
+import { feeOverrides, fetchRawReceipt, waitAndVerify } from "./lib/tx.js";
+import { writeReport, type DailyReport } from "./lib/report.js";
 
-const MAX_UINT160 = (1n << 160n) - 1n;
-const MAX_UINT48 = (1n << 48n) - 1n;
+type TokenSpec = { name: string; address: string };
 
-interface Erc20Writer {
-  transfer(to: string, value: bigint, overrides: { nonce: number }): Promise<TransactionResponse>;
-  approve(spender: string, value: bigint, overrides: { nonce: number }): Promise<TransactionResponse>;
+const TOKEN_LIST: TokenSpec[] = [
+  { name: "pathUSD", address: TOKENS.pathUSD },
+  { name: "AlphaUSD", address: TOKENS.alphaUSD },
+  { name: "BetaUSD", address: TOKENS.betaUSD },
+  { name: "ThetaUSD", address: TOKENS.thetaUSD }
+];
+
+function explorerUrl(txHash: string): string {
+  return `${TEMPO.explorerTxBase}${txHash}`;
 }
 
-interface Permit2Writer {
-  approve(
-    token: string,
-    spender: string,
-    amount: bigint,
-    expiration: bigint,
-    overrides: { nonce: number }
-  ): Promise<TransactionResponse>;
+async function assertTokenDecimals(contract: Contract, expected: number, tokenName: string): Promise<void> {
+  const dec: number = Number(await contract.decimals());
+  if (dec !== expected) {
+    throw new Error(`${tokenName}.decimals mismatch: expected=${expected} actual=${dec}`);
+  }
 }
 
-async function runDailyActivity(): Promise<string> {
-  const env = loadRuntimeEnv();
-  const provider = await createTempoProvider();
-  const wallet = await loadWalletFromKeystore(env.walletEncPath, env.walletPassword, provider);
+async function main(): Promise<void> {
+  const env = loadEnv(process.env as Record<string, unknown>);
+  const provider = makeProvider(env.TEMPO_RPC_URL, env.TEMPO_CHAIN_ID);
+  await assertChainId(provider, env.TEMPO_CHAIN_ID);
 
-  const pathToken = new Contract(TOKENS.pathUSD, ERC20_ABI, wallet) as unknown as Erc20Writer;
-  const alphaToken = new Contract(TOKENS.AlphaUSD, ERC20_ABI, wallet) as unknown as Erc20Writer;
-  const betaToken = new Contract(TOKENS.BetaUSD, ERC20_ABI, wallet) as unknown as Erc20Writer;
-  const thetaToken = new Contract(TOKENS.ThetaUSD, ERC20_ABI, wallet) as unknown as Erc20Writer;
-  const permit2 = new Contract(PERMIT2_ADDRESS, PERMIT2_ABI, wallet) as unknown as Permit2Writer;
+  const wallet = await loadWalletFromEnc(env.WALLET_ENC_PATH, env.WALLET_PASSWORD);
+  const signer = wallet.connect(provider);
 
-  const txRunner = await SequentialTxRunner.create(wallet, provider);
-  const txs: TxReport[] = [];
+  const sink = getAddress(env.SINK_ADDRESS_CHECKSUM);
 
-  txs.push(
-    await txRunner.sendAndWait("pathUSD.transfer", (nonce) =>
-      pathToken.transfer(env.sinkAddress, env.transferAmountWei, { nonce })
-    )
-  );
+  const dateJst = nowJstDateString();
+  const timeJst = nowJstTimeString();
 
-  txs.push(
-    await txRunner.sendAndWait("AlphaUSD.transfer", (nonce) =>
-      alphaToken.transfer(env.sinkAddress, env.transferAmountWei, { nonce })
-    )
-  );
+  const amount = parseUnits(env.TRANSFER_AMOUNT, TOKEN_DECIMALS);
 
-  txs.push(
-    await txRunner.sendAndWait("BetaUSD.transfer", (nonce) =>
-      betaToken.transfer(env.sinkAddress, env.transferAmountWei, { nonce })
-    )
-  );
+  let nonce = await provider.getTransactionCount(await signer.getAddress(), "pending");
 
-  txs.push(
-    await txRunner.sendAndWait("ThetaUSD.transfer", (nonce) =>
-      thetaToken.transfer(env.sinkAddress, env.transferAmountWei, { nonce })
-    )
-  );
-
-  txs.push(
-    await txRunner.sendAndWait("AlphaUSD.approve(Permit2, MaxUint256)", (nonce) =>
-      alphaToken.approve(PERMIT2_ADDRESS, MaxUint256, { nonce })
-    )
-  );
-
-  txs.push(
-    await txRunner.sendAndWait("Permit2.approve(AlphaUSD, SINK, MaxUint160, MaxUint48)", (nonce) =>
-      permit2.approve(TOKENS.AlphaUSD, env.sinkAddress, MAX_UINT160, MAX_UINT48, { nonce })
-    )
-  );
-
-  const jst = getJstParts();
   const report: DailyReport = {
-    dateJst: jst.date,
-    runAtJst: jst.timestamp,
-    walletAddress: wallet.address,
-    sinkAddress: env.sinkAddress,
-    chainId: Number(TEMPO_CHAIN_ID),
-    rpcUrl: TEMPO_RPC_URL,
-    txs
+    dateJst,
+    timeJst,
+    chainId: env.TEMPO_CHAIN_ID,
+    rpcUrl: env.TEMPO_RPC_URL,
+    wallet: await signer.getAddress(),
+    sink,
+    items: []
   };
 
-  return writeDailyReport(env.reportBaseDir, report);
+  for (const t of TOKEN_LIST) {
+    const token = new Contract(t.address, ERC20_ABI, signer);
+    await assertTokenDecimals(token, TOKEN_DECIMALS, t.name);
+
+    const overrides = await feeOverrides(provider, nonce);
+    const gasLimit = await token.transfer.estimateGas(sink, amount, overrides);
+    const tx = await token.transfer(sink, amount, { ...overrides, gasLimit });
+
+    await waitAndVerify(tx);
+    const rawReceipt = await fetchRawReceipt(provider, tx.hash);
+
+    report.items.push({
+      name: `transfer:${t.name}`,
+      hash: tx.hash,
+      explorer: explorerUrl(tx.hash),
+      receipt: rawReceipt
+    });
+
+    nonce += 1;
+  }
+
+  {
+    const alpha = new Contract(TOKENS.alphaUSD, ERC20_ABI, signer);
+    await assertTokenDecimals(alpha, TOKEN_DECIMALS, "AlphaUSD");
+
+    const overrides = await feeOverrides(provider, nonce);
+    const gasLimit = await alpha.approve.estimateGas(PREDEPLOYED.permit2, MaxUint256, overrides);
+    const tx = await alpha.approve(PREDEPLOYED.permit2, MaxUint256, { ...overrides, gasLimit });
+
+    await waitAndVerify(tx);
+    const rawReceipt = await fetchRawReceipt(provider, tx.hash);
+
+    report.items.push({
+      name: "approve:AlphaUSD->Permit2(MaxUint256)",
+      hash: tx.hash,
+      explorer: explorerUrl(tx.hash),
+      receipt: rawReceipt
+    });
+
+    nonce += 1;
+  }
+
+  {
+    const permit2 = new Contract(PREDEPLOYED.permit2, PERMIT2_ABI, signer);
+
+    const MAX_UINT160 = (1n << 160n) - 1n;
+    const MAX_UINT48 = (1n << 48n) - 1n;
+
+    const overrides = await feeOverrides(provider, nonce);
+    const gasLimit = await permit2.approve.estimateGas(
+      TOKENS.alphaUSD,
+      sink,
+      MAX_UINT160,
+      MAX_UINT48,
+      overrides
+    );
+
+    const tx = await permit2.approve(TOKENS.alphaUSD, sink, MAX_UINT160, MAX_UINT48, { ...overrides, gasLimit });
+
+    await waitAndVerify(tx);
+    const rawReceipt = await fetchRawReceipt(provider, tx.hash);
+
+    report.items.push({
+      name: "nonTip20:Permit2.approve(AlphaUSD,SINK,MaxUint160,MaxUint48)",
+      hash: tx.hash,
+      explorer: explorerUrl(tx.hash),
+      receipt: rawReceipt
+    });
+
+    nonce += 1;
+  }
+
+  const out = await writeReport(report);
+  console.log(`OK: wrote report ${out}`);
+  console.log(`wallet=${report.wallet} sink=${report.sink} chainId=${report.chainId}`);
+  for (const item of report.items) {
+    console.log(`${item.name}: ${item.hash} ${item.explorer}`);
+  }
 }
 
-runDailyActivity()
-  .then((reportPath) => {
-    console.log(`[daily] success report=${reportPath}`);
-  })
-  .catch((error: unknown) => {
-    if (error instanceof Error) {
-      console.error(`[daily] failed: ${error.message}`);
-      console.error(error.stack);
-    } else {
-      console.error("[daily] failed with non-error value");
-      console.error(error);
-    }
-
-    process.exit(1);
-  });
+main().catch((e) => {
+  console.error("FATAL:", e instanceof Error ? e.message : String(e));
+  process.exit(1);
+});

@@ -1,27 +1,24 @@
-# CLAUDE.md
+# CLAUDE.md — Non-negotiables / Mistake Log
 
-## Purpose
+## Non-negotiables (絶対遵守)
+- 推測・一般論で断定しない（根拠: 実コード/実ログ/実行結果/参照URL）
+- 例外の握りつぶし禁止（catchして黙殺/ログ無効化/バリデーション無効化/リトライで隠す/フィーチャーフラグで止める等）
+- 安易なワークアラウンド禁止（タイムアウト増やす、リトライ増やすだけ等）
+- faucet関連コードを入れない（tempo_fundAddress等）
+- 仕様変更を伴う広範囲リファクタや破壊的変更禁止
+- 証拠なしの原因特定・修正確定禁止
 
-このリポジトリの実装・修正時に、発生した不具合と再発防止を記録する。
+## Definition of Done
+- `npm ci && npm run lint && npm test` が通る
+- `npm run run:daily` が reports/ に JSON を生成する
+- GitHub Actions が毎日実行し、reports/ を commit する
 
-## Update Rule (mandatory)
-
-バグ・不具合・想定外挙動を修正したときは、同じコミット内で必ず `Mistake Log` を更新する。
-
-各エントリに必ず記載する項目:
-
-- What happened: 何が起きたか
-- Root cause: 根本原因
-- Prevention: 再発防止（追加したテスト/チェック）
-
-## Mistake Log
-
-- 2026-02-15
-  - What happened: `src/tempo.ts` の token 定数読み込み時に `INVALID_ARGUMENT: bad address checksum` が発生し、テスト実行が失敗した。
-  - Root cause: docs 表記の mixed-case 文字列をそのまま `getAddress()` に渡したため、checksum 不一致として reject された。
-  - Prevention: token 定数入力値を lowercase に統一し `getAddress()` で正規化。`tests/tx.test.ts` で `src/lib/tx.ts` 経由 import を通し、定数初期化エラーが再発するとテストで検知される状態にした。
-
-- 2026-02-15
-  - What happened: `npm run build` で `Cannot invoke an object which is possibly 'undefined'` と `Wallet | HDNodeWallet` 型不一致で失敗した。
-  - Root cause: `ethers.Contract` の動的メソッドを厳密型で扱っておらず、keystore 復号戻り型も union を考慮していなかった。
-  - Prevention: `src/daily.ts` に `Erc20Writer` / `Permit2Writer` を明示し、`src/lib/keystore.ts` と `src/lib/tx.ts` を union 対応へ修正。`npm run build` を検証手順に固定して型崩れを継続検出する。
+## Mistake Log（修正のたびに必ず追記する）
+フォーマット（必須）:
+- Date:
+- Symptom:
+- Evidence (ログ/tx/stacktrace/URL):
+- Root Cause:
+- Fix:
+- Prevent Recurrence (テスト/チェック追加内容):
+- Files Changed:
