@@ -7,6 +7,11 @@
 - https://docs.tempo.xyz/quickstart/connection-details
 - https://docs.tempo.xyz/quickstart/evm-compatibility
 - https://docs.tempo.xyz/quickstart/predeployed-contracts
+- https://docs.tempo.xyz/protocol/fees/spec-fee
+- https://docs.tempo.xyz/protocol/fees/spec-fee-amm
+- https://docs.tempo.xyz/protocol/tip20/spec
+- https://docs.tempo.xyz/protocol/tip403/spec
+- https://docs.chainstack.com/reference/tempo-eth-gettransactionreceipt
 
 ## Setup (local)
 1. Install
@@ -48,4 +53,5 @@ Optional Repository Variable:
 - faucet（`tempo_fundAddress` 等）は実装に含みません。
 - 失敗時は `exit code != 0` で落ち、握りつぶしません。
 - `SINK_ADDRESS` はゼロアドレスと TIP-20 namespace（`0x20c000000000000000000000...`）を受け付けません（TIP-20 Invalid Recipient Protection）。
-- 実行前に各 TIP-20 transfer の `balanceOf(wallet)`、`transferAmount`、`SINK` をログ出力し、`estimateGas` 失敗時は `to/from/data/nonce/feeFields` を含む再スロー情報を出力します。
+- 実行前に TIP-20 `paused/currency/transferPolicyId/TIP-403 isAuthorized(sender/recipient|spender)` と transfer 残高、`max_fee` に対する alphaUSD 残高を検証します。
+- 失敗時は `reports/YYYY-MM-DD/run-*.failure.json` を出力し、`step/preflight/error` を残して `exit(1)` します。

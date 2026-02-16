@@ -12,7 +12,9 @@ export const TOKENS = {
 } as const;
 
 export const PREDEPLOYED = {
-  permit2: "0x000000000022d473030f116ddee9f6b43ac78ba3"
+  permit2: "0x000000000022d473030f116ddee9f6b43ac78ba3",
+  feeManager: "0xfeec000000000000000000000000000000000000",
+  tip403Registry: "0x403c000000000000000000000000000000000000"
 } as const;
 
 export const TOKEN_DECIMALS = 6;

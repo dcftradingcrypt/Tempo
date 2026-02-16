@@ -24,6 +24,42 @@
 - Files Changed:
 - Date: 2026-02-16
 - Symptom:
+  - `estimateGas` 失敗時に原因が opaque で、Tempo固有の失敗要因（TIP-403 / fee preference / max_fee pre-deduct / receipt fee fields）を run 1回で確定できなかった
+- Evidence (ログ/tx/stacktrace/URL):
+  - `missing revert data` で停止し、送信前判定で落とすべき条件を tx 実行経路で初めて検出していた
+  - Tempo仕様URL:
+    - `https://docs.tempo.xyz/protocol/tip20/spec`
+    - `https://docs.tempo.xyz/protocol/tip403/spec`
+    - `https://docs.tempo.xyz/protocol/fees/spec-fee`
+    - `https://docs.tempo.xyz/protocol/fees/spec-fee-amm`
+    - `https://docs.chainstack.com/reference/tempo-eth-gettransactionreceipt`
+- Root Cause:
+  - 事前確定判定の不足（TIP-403 policy / fee token preference / max_fee 残高）
+  - report が receipt の `feeToken/feePayer` を必須検証しておらず、Tempo拡張項目欠落を見逃す設計だった
+- Fix:
+  - `FeeManager.setUserToken(alphaUSD)` を日次先頭 tx に追加
+  - TIP-20 preflight (`paused/currency/transferPolicyId/isAuthorized`) を transfer/approve 前に実施
+  - `max_fee = gas_limit * gas_price` を atto->micro に切り上げ変換し、alphaUSD 残高で送信前 fail
+  - report を拡張し `gasUsed/effectiveGasPrice/feeToken/feePayer/receiptRaw` を各 tx に必須保存
+  - 例外時に `run-*.failure.json` を保存して `step/preflight/error` を残して `exit(1)` 維持
+- Prevent Recurrence (テスト/チェック追加内容):
+  - `src/lib/feeMath.test.ts` で `ceil(attodollars/1e12)` 境界テストを追加
+  - `src/lib/report.test.ts` で `feeToken/feePayer` 抽出必須テストを追加
+- Files Changed:
+  - `src/daily.ts`
+  - `src/lib/report.ts`
+  - `src/lib/feeMath.ts`
+  - `src/lib/feeMath.test.ts`
+  - `src/lib/report.test.ts`
+  - `src/tempo.ts`
+  - `src/abi/erc20.ts`
+  - `src/abi/feeManager.ts`
+  - `src/abi/tip403.ts`
+  - `README.md`
+  - `CLAUDE.md`
+
+- Date: 2026-02-16
+- Symptom:
   - `run:daily` が `missing revert data ... estimateGas` で終了し、原因（SINK誤設定/残高不足）を転送前に確定できなかった
 - Evidence (ログ/tx/stacktrace/URL):
   - 実運用ログ: `FATAL: ... missing revert data`（送信前に `estimateGas` に失敗）
