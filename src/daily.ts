@@ -35,14 +35,29 @@ function txFailureMessage(
   to: string,
   from: string,
   data: string,
+  tokenName?: string,
+  tokenAddress?: string,
+  sink?: string,
+  amount?: bigint,
+  balance?: bigint,
   nonce: number,
   feeFields: Record<string, unknown>,
   cause: unknown
 ): string {
   const reason = cause instanceof Error ? cause.message : String(cause);
-  return `${action} failed. to=${to} from=${from} nonce=${nonce} data=${data} feeFields=${stringifyFeeData(
-    feeFields
-  )} cause=${reason}`;
+  const details = [
+    `token=${tokenName ?? "n/a"}`,
+    `tokenAddress=${tokenAddress ?? "n/a"}`,
+    `wallet=${from}`,
+    `sink=${sink ?? "n/a"}`,
+    `amount=${amount?.toString() ?? "n/a"}`,
+    `balance=${balance?.toString() ?? "n/a"}`,
+    `nonce=${nonce}`,
+    `data=${data}`,
+    `feeFields=${stringifyFeeData(feeFields)}`
+  ].join(" ");
+
+  return `${action} failed. to=${to} from=${from} ${details} cause=${reason}`;
 }
 
 async function assertTokenDecimals(contract: Contract, expected: number, tokenName: string): Promise<void> {
@@ -59,7 +74,7 @@ async function ensureBalance(
   tokenName: string,
   tokenAddress: string,
   amount: bigint
-): Promise<void> {
+): Promise<bigint> {
   const balance = await token.balanceOf(sender);
   console.log(
     `[balance] token=${tokenName} address=${tokenAddress} sender=${sender} sink=${sink} balance=${balance.toString()} transferAmount=${amount.toString()}`
@@ -67,9 +82,11 @@ async function ensureBalance(
 
   if (balance < amount) {
     throw new Error(
-      `${tokenName} balance insufficient. sender=${sender} token=${token.target as string} balance=${balance.toString()} required=${amount.toString()}`
+      `${tokenName} balance insufficient. wallet=${sender} tokenName=${tokenName} token=${tokenAddress} sink=${sink} balance=${balance.toString()} required=${amount.toString()}`
     );
   }
+
+  return balance;
 }
 
 async function main(): Promise<void> {
@@ -104,7 +121,7 @@ async function main(): Promise<void> {
   for (const t of TOKEN_LIST) {
     const token = new Contract(t.address, ERC20_ABI, signer);
     await assertTokenDecimals(token, TOKEN_DECIMALS, t.name);
-    await ensureBalance(sender, sink, token, t.name, t.address, amount);
+    const balance = await ensureBalance(sender, sink, token, t.name, t.address, amount);
 
     const overrides = await feeOverrides(provider, nonce);
     const data = token.interface.encodeFunctionData("transfer", [sink, amount]);
@@ -112,17 +129,22 @@ async function main(): Promise<void> {
     try {
       gasLimit = await token.transfer.estimateGas(sink, amount, overrides);
     } catch (error) {
-      throw new Error(
-        txFailureMessage(
-          `transfer:${t.name} estimateGas`,
-          token.target as string,
-          sender,
-          data,
-          nonce,
-          overrides,
-          error
-        )
+      const msg = txFailureMessage(
+        `transfer:${t.name} estimateGas`,
+        token.target as string,
+        sender,
+        data,
+        t.name,
+        t.address,
+        sink,
+        amount,
+        balance,
+        nonce,
+        overrides,
+        error
       );
+      console.error("estimateGas failure:", msg);
+      throw new Error(msg);
     }
 
     let tx;
@@ -135,6 +157,11 @@ async function main(): Promise<void> {
           token.target as string,
           sender,
           data,
+          t.name,
+          t.address,
+          sink,
+          amount,
+          balance,
           nonce,
           overrides,
           error
@@ -151,6 +178,11 @@ async function main(): Promise<void> {
           token.target as string,
           sender,
           data,
+          t.name,
+          t.address,
+          sink,
+          amount,
+          balance,
           nonce,
           overrides,
           error

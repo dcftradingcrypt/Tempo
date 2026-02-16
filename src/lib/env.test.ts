@@ -19,7 +19,7 @@ describe("loadEnv", () => {
     expect(() =>
       loadEnv({
         WALLET_PASSWORD: "x",
-        SINK_ADDRESS: "0x20c0000000000000000000000000000000000123"
+        SINK_ADDRESS: "0x20c0000000000000000000000000000000000000"
       })
     ).toThrow("SINK_ADDRESS must not be TIP-20 namespace target");
   });

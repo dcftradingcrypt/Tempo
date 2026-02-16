@@ -24,6 +24,28 @@
 - Files Changed:
 - Date: 2026-02-16
 - Symptom:
+  - `run:daily` が `missing revert data ... estimateGas` で終了し、原因（SINK誤設定/残高不足）を転送前に確定できなかった
+- Evidence (ログ/tx/stacktrace/URL):
+  - 実運用ログ: `FATAL: ... missing revert data`（送信前に `estimateGas` に失敗）
+  - `SINK_ADDRESS` のゼロアドレス許容、TIP-20 prefix 送信先許容が残っていた
+- Root Cause:
+  - `env` バリデーションと transfer 前の残高検証が不足し、`estimateGas` 落ち時に必要メタデータが再現ログへ残らなかった
+- Fix:
+  - `src/lib/env.ts` で `SINK_ADDRESS` のゼロアドレスと TIP-20 プレフィックスを `throw` で即拒否
+  - `src/daily.ts` で `transfer` 各トークンの `balanceOf(sender)` を取得し不足時は明示エラー
+  - `src/daily.ts` で `transfer` の `estimateGas` 失敗時に token名/tokenアドレス/wallet/sink/amount/balance/nonce/feeFields を再現可能なエラーメッセージでログ再送
+- Prevent Recurrence (テスト/チェック追加内容):
+  - `src/lib/env.test.ts` にゼロ/`TIP-20 prefix`拒否ケースを追加
+  - `src/daily.ts` の transfer で `balance` ログと `estimateGas` コンテキストログを維持
+- Files Changed:
+  - `src/lib/env.ts`
+  - `src/lib/env.test.ts`
+  - `src/daily.ts`
+  - `README.md`
+  - `CLAUDE.md`
+
+- Date: 2026-02-16
+- Symptom:
   - `run:daily` が `missing revert data (action=\"estimateGas\")` で停止し、トランザクション原因（宛先/データ/残高）を確定できなかった
 - Evidence (ログ/tx/stacktrace/URL):
   - 実ログ: `FATAL: ... missing revert data`
