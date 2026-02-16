@@ -32,6 +32,8 @@ jobs:
         run: npm test
 
       - name: Run daily bot
+        id: daily
+        continue-on-error: true
         env:
           TEMPO_RPC_URL: "https://rpc.moderato.tempo.xyz"
           TEMPO_CHAIN_ID: "42431"
@@ -42,6 +44,7 @@ jobs:
         run: npm run run:daily
 
       - name: Commit reports
+        if: always()
         run: |
           git config user.name "tempo-bot"
           git config user.email "tempo-bot@users.noreply.github.com"
@@ -52,3 +55,7 @@ jobs:
           fi
           git commit -m "chore(reports): daily run"
           git push
+
+      - name: Fail job if daily failed
+        if: steps.daily.outcome == 'failure'
+        run: exit 1

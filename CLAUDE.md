@@ -82,6 +82,27 @@
 
 - Date: 2026-02-16
 - Symptom:
+  - `run:daily` が `missing revert data` で失敗した際、`run:daily` が `exit 1)` になり以降のステップが中断され、failure report がコミットされない
+- Evidence (ログ/tx/stacktrace/URL):
+  - 失敗実行時に job が `Run daily bot` で停止し、`Commit reports` step が実行されない設計だった
+  - 事故時の `run-*.failure.json` だけではなく、workflow 上のコミット自体が残らない状態
+- Root Cause:
+  - ワークフローで `run:daily` の失敗時にジョブ終了扱いになり、`if` 条件がなく `Commit reports` が到達不能だった
+- Fix:
+  - `.github/workflows/daily.yml` の `Run daily bot` に `id: daily` と `continue-on-error: true` を付与
+  - `Commit reports` に `if: always()` を付与し、失敗時でもレポートをコミットする
+  - 最後に `Fail job if daily failed` を追加し、`steps.daily.outcome == 'failure'` なら `exit 1`
+  - `push/pull_request` で軽量検証を行う `.github/workflows/ci.yml` を追加（`npm ci` / `npm run lint` / `npm test`）
+- Prevent Recurrence (再発防止):
+  - 失敗時でも artifacts を残すことをワークフロー契約として確認（`if: always()` の存在を保守）
+  - 主要 step の順序変更前に `git diff` で failure report コミット可否をレビューする運用を追加
+- Files Changed:
+  - `.github/workflows/daily.yml`
+  - `.github/workflows/ci.yml`
+  - `CLAUDE.md`
+
+- Date: 2026-02-16
+- Symptom:
   - `run:daily` が `missing revert data (action=\"estimateGas\")` で停止し、トランザクション原因（宛先/データ/残高）を確定できなかった
 - Evidence (ログ/tx/stacktrace/URL):
   - 実ログ: `FATAL: ... missing revert data`
