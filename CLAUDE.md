@@ -142,3 +142,18 @@
   - `src/daily.ts`
   - `README.md`
   - `CLAUDE.md`
+- Date: 2026-02-18
+- Symptom:
+  - origin/main の確認手順（git ls-tree -r --name-only origin/main, git cat-file -s origin/main:secrets/wallet.enc）を実施し、wallet.enc を追跡運用対象として再確認した
+- Evidence (ログ/tx/stacktrace/URL):
+  - git ls-tree -r --name-only origin/main | Select-String -Pattern "secrets/wallet.enc"
+  - git cat-file -s origin/main:secrets/wallet.enc
+- Root Cause:
+  - wallet.enc の追跡状態を push 前点検せずに運用を進めるリスク
+- Fix:
+  - wallet.enc を最小差分で staging し、git commit へ持ち込む運用を明示
+- Prevent Recurrence (再発防止):
+  - origin/main 上の wallet.enc の有無とサイズを push 前に毎回確認
+- Files Changed:
+  - secrets/wallet.enc
+  - CLAUDE.md
