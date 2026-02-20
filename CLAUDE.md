@@ -157,3 +157,36 @@
 - Files Changed:
   - secrets/wallet.enc
   - CLAUDE.md
+
+- Date: 2026-02-19
+- Symptom:
+  - Windows manual run had risk of decode failure from password/sink input encoding/newline contamination.
+  - Manual address typing from `.enc` was error-prone.
+- Evidence (logs/stacktrace/code):
+  - `src/lib/env.ts` accepted only direct `WALLET_PASSWORD` / `SINK_ADDRESS` values.
+  - `.github/workflows/daily.yml` run entrypoint is `npm run run:daily`.
+  - Keystore JSON created by `scripts/encrypt-wallet.ts` contains `address` and can be listed without decrypting.
+- Root Cause:
+  - No standardized secret-file input path (BOM/newline handling undefined).
+  - No local interactive launcher for mode/address selection.
+- Fix:
+  - Added `src/lib/secretFile.ts` for UTF-8 read + BOM strip + trailing newline strip.
+  - Updated `src/lib/env.ts` to enforce XOR between value and `*_FILE` for wallet password and sink address.
+  - Added `src/cli/list-addresses.ts` to list addresses from `.enc` in JSON.
+  - Added `tools/run-daily.bat` and `tools/run-daily.ps1` for Windows interactive launch using SecureString to temp files.
+  - Added workflow_dispatch inputs/env wiring in `.github/workflows/daily.yml`.
+- Prevent Recurrence (checks/tests):
+  - Added `src/lib/secretFile.test.ts` for BOM/newline cases.
+  - Extended `src/lib/env.test.ts` for XOR/file-input cases.
+  - Verification commands: `npm ci`, `npm run lint`, `npm test`.
+- Files Changed:
+  - tools/run-daily.bat
+  - tools/run-daily.ps1
+  - src/lib/env.ts
+  - src/lib/secretFile.ts
+  - src/cli/list-addresses.ts
+  - src/lib/secretFile.test.ts
+  - src/lib/env.test.ts
+  - package.json
+  - .github/workflows/daily.yml
+  - CLAUDE.md

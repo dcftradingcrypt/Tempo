@@ -7,6 +7,7 @@
     "lint": "eslint .",
     "test": "vitest run",
     "run:daily": "tsx src/daily.ts",
+    "list-addresses": "tsx src/cli/list-addresses.ts",
     "encrypt:wallet": "tsx scripts/encrypt-wallet.ts",
     "show:address": "tsx scripts/show-address.ts"
   },
