@@ -1,0 +1,85 @@
+name: Robinhood NFT P0 historical backfill
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    if: startsWith(github.event.issue.title, '[RUN-RH-NFT-P0]')
+    runs-on: ubuntu-latest
+    timeout-minutes: 300
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Reconstruct and verify read-only collector
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .runtime artifacts
+          cat rh_nft_backfill/collector.b64.part* | base64 -d | gzip -d > .runtime/backfill.py
+          chmod 0555 .runtime/backfill.py
+          python -m py_compile .runtime/backfill.py
+          python .runtime/backfill.py --self-test
+          sha256sum .runtime/backfill.py | tee artifacts/collector_sha256.txt
+          test "$(wc -c < <(cat rh_nft_backfill/collector.b64.part*))" -eq 15496
+
+      - name: Collect P0 historical chain data
+        id: collect
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python .runtime/backfill.py \
+            --contracts rh_nft_backfill/contracts.csv \
+            --priority P0 \
+            --out artifacts/robinhood_nft_p0 \
+            --max-pages 5000 \
+            --request-delay 0.18 \
+            --rpc-batch-size 30 \
+            --internal-trace-limit 5000 \
+            2>&1 | tee artifacts/backfill.log
+
+      - name: Package result manifest
+        if: always()
+        shell: bash
+        run: |
+          cp -f rh_nft_backfill/contracts.csv artifacts/contracts.csv
+          python - <<'PY'
+          import hashlib, json, pathlib
+          root = pathlib.Path('artifacts')
+          files = []
+          for p in sorted(root.rglob('*')):
+              if p.is_file() and p.name != 'artifact_manifest.json':
+                  data = p.read_bytes()
+                  files.append({
+                    'path': str(p.relative_to(root)),
+                    'size': len(data),
+                    'sha256': hashlib.sha256(data).hexdigest(),
+                  })
+          (root / 'artifact_manifest.json').write_text(
+              json.dumps({'files': files}, indent=2, sort_keys=True), encoding='utf-8')
+          PY
+
+      - name: Upload P0 result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: robinhood-nft-p0-backfill
+          path: artifacts/
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 9
+
+      - name: Enforce collector result
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.collect.outcome }}" = "success"
